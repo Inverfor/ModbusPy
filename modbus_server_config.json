@@ -1,0 +1,38 @@
+{
+    "serial": {
+        "port": "/dev/ttyUSB0",
+        "baudrate": 9600,
+        "bytesize": 8,
+        "parity": "N",
+        "stopbits": 1,
+        "timeout": 1.0
+    },
+    "server": {
+        "max_slaves": 10,
+        "log_level": "INFO",
+        "log_file": "/var/log/modbus_server.log",
+        "stats_interval": 60,
+        "backup_interval": 300
+    },
+    "performance": {
+        "memory_check_interval": 30,
+        "cpu_check_interval": 10,
+        "auto_optimize": true
+    },
+    "pi_zero_optimization": {
+        "enable_cpu_governor": true,
+        "cpu_governor": "performance",
+        "enable_memory_optimization": true,
+        "swap_usage_threshold": 50,
+        "temperature_threshold": 70,
+        "throttle_on_overheat": true
+    },
+    "industrial_features": {
+        "enable_watchdog": true,
+        "watchdog_timeout": 30,
+        "enable_backup": true,
+        "backup_directory": "/var/backups/modbus",
+        "enable_redundancy": false,
+        "redundant_port": "/dev/ttyUSB1"
+    }
+}

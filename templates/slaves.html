@@ -1,0 +1,577 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Esclavos - Modbus Industrial Server{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Slaves Overview -->
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-network-wired"></i> Gestión de Esclavos Modbus RTU</span>
+                <button class="btn btn-success btn-sm" onclick="addExampleSlave()">
+                    <i class="fas fa-plus"></i> Agregar Esclavo de Ejemplo
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Descripción</th>
+                                <th>Estado</th>
+                                <th>Registros</th>
+                                <th>Última Comunicación</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="slaves-table">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">
+                                    <i class="fas fa-spinner fa-spin"></i> Cargando esclavos...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slave Details Modal -->
+<div class="modal fade" id="slaveDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle"></i> Detalles del Esclavo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="slave-details-content">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin"></i> Cargando detalles...
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" onclick="editSlaveRegisters()">
+                    <i class="fas fa-edit"></i> Editar Registros
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Register Modal -->
+<div class="modal fade" id="editRegisterModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> Editar Registro
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-register-form">
+                    <div class="mb-3">
+                        <label class="form-label">Esclavo ID</label>
+                        <input type="number" class="form-control" id="edit-slave-id" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Registro</label>
+                        <select class="form-select" id="edit-register-type">
+                            <option value="holding">Holding Register</option>
+                            <option value="input">Input Register</option>
+                            <option value="coil">Coil</option>
+                            <option value="discrete">Discrete Input</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Dirección</label>
+                        <input type="number" class="form-control" id="edit-register-address" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Valor</label>
+                        <input type="number" class="form-control" id="edit-register-value" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="saveRegisterEdit()">
+                    <i class="fas fa-save"></i> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Real-time Data Display -->
+<div class="row" id="slave-data-section" style="display: none;">
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-line"></i> Datos en Tiempo Real - Esclavo <span id="current-slave-name"></span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="chart-container">
+                            <canvas id="slave-data-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="card">
+                            <div class="card-header">Registros Actuales</div>
+                            <div class="card-body">
+                                <div id="current-registers" style="max-height: 300px; overflow-y: auto;">
+                                    <!-- Current register values will be displayed here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentSlaveId = null;
+let slaveDataChart = null;
+let updateInterval = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadSlaves();
+    
+    // Check if specific slave is requested via URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const slaveParam = urlParams.get('slave');
+    if (slaveParam) {
+        currentSlaveId = parseInt(slaveParam);
+        showSlaveData(currentSlaveId);
+    }
+    
+    // Update slaves list every 10 seconds
+    setInterval(loadSlaves, 10000);
+});
+
+function loadSlaves() {
+    fetch('/api/slaves')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displaySlaves(data.slaves);
+            } else {
+                showAlert('Error cargando esclavos: ' + data.error, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading slaves:', error);
+            showAlert('Error de conexión al cargar esclavos', 'danger');
+        });
+}
+
+function displaySlaves(slaves) {
+    const tbody = document.getElementById('slaves-table');
+    tbody.innerHTML = '';
+    
+    if (slaves.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center text-muted">
+                    <i class="fas fa-info-circle"></i> No hay esclavos configurados
+                    <br><small>Haga clic en "Agregar Esclavo de Ejemplo" para comenzar</small>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    slaves.forEach(slave => {
+        const statusClass = slave.status === 'active' ? 'status-active' : 'status-inactive';
+        const statusText = slave.status === 'active' ? 'Activo' : 'Inactivo';
+        const lastRequest = slave.last_request > 0 ? 
+            new Date(slave.last_request * 1000).toLocaleString('es-ES') : 'Nunca';
+        
+        tbody.innerHTML += `
+            <tr>
+                <td><strong>${slave.id}</strong></td>
+                <td>${slave.name}</td>
+                <td>${slave.description}</td>
+                <td>
+                    <span class="status-indicator ${statusClass}"></span>
+                    ${statusText}
+                </td>
+                <td>
+                    <span class="badge bg-primary">${slave.total_registers}</span>
+                </td>
+                <td><small>${lastRequest}</small></td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-info" onclick="viewSlaveDetails(${slave.id})" title="Ver Detalles">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-outline-primary" onclick="showSlaveData(${slave.id})" title="Ver Datos">
+                            <i class="fas fa-chart-line"></i>
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="editSlaveRegister(${slave.id})" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function viewSlaveDetails(slaveId) {
+    fetch(`/api/slave/${slaveId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displaySlaveDetails(data.slave);
+                const modal = new bootstrap.Modal(document.getElementById('slaveDetailsModal'));
+                modal.show();
+            } else {
+                showAlert('Error cargando detalles del esclavo: ' + data.error, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading slave details:', error);
+            showAlert('Error de conexión al cargar detalles', 'danger');
+        });
+}
+
+function displaySlaveDetails(slave) {
+    const content = document.getElementById('slave-details-content');
+    
+    let holdingRegistersHtml = '';
+    Object.entries(slave.holding_registers).forEach(([addr, value]) => {
+        holdingRegistersHtml += `<tr><td>${addr}</td><td>${value}</td><td>0x${value.toString(16).toUpperCase()}</td></tr>`;
+    });
+    
+    let inputRegistersHtml = '';
+    Object.entries(slave.input_registers).forEach(([addr, value]) => {
+        inputRegistersHtml += `<tr><td>${addr}</td><td>${value}</td><td>0x${value.toString(16).toUpperCase()}</td></tr>`;
+    });
+    
+    let coilsHtml = '';
+    Object.entries(slave.coils).forEach(([addr, value]) => {
+        coilsHtml += `<tr><td>${addr}</td><td>${value ? 'TRUE' : 'FALSE'}</td><td>${value ? '1' : '0'}</td></tr>`;
+    });
+    
+    let discreteInputsHtml = '';
+    Object.entries(slave.discrete_inputs).forEach(([addr, value]) => {
+        discreteInputsHtml += `<tr><td>${addr}</td><td>${value ? 'TRUE' : 'FALSE'}</td><td>${value ? '1' : '0'}</td></tr>`;
+    });
+    
+    content.innerHTML = `
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h6><i class="fas fa-tag"></i> Información General</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>ID:</strong></td><td>${slave.slave_id}</td></tr>
+                    <tr><td><strong>Nombre:</strong></td><td>${slave.name}</td></tr>
+                    <tr><td><strong>Descripción:</strong></td><td>${slave.description}</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6><i class="fas fa-chart-bar"></i> Estadísticas</h6>
+                <table class="table table-sm">
+                    <tr><td><strong>Total Requests:</strong></td><td>${slave.statistics.total_requests}</td></tr>
+                    <tr><td><strong>Successful:</strong></td><td>${slave.statistics.successful_requests}</td></tr>
+                    <tr><td><strong>Failed:</strong></td><td>${slave.statistics.failed_requests}</td></tr>
+                    <tr><td><strong>Bytes Sent:</strong></td><td>${formatBytes(slave.statistics.bytes_sent)}</td></tr>
+                    <tr><td><strong>Bytes Received:</strong></td><td>${formatBytes(slave.statistics.bytes_received)}</td></tr>
+                </table>
+            </div>
+        </div>
+        
+        <ul class="nav nav-tabs" id="registersTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="holding-tab" data-bs-toggle="tab" data-bs-target="#holding" type="button">
+                    Holding Registers (${Object.keys(slave.holding_registers).length})
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="input-tab" data-bs-toggle="tab" data-bs-target="#input" type="button">
+                    Input Registers (${Object.keys(slave.input_registers).length})
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="coils-tab" data-bs-toggle="tab" data-bs-target="#coils" type="button">
+                    Coils (${Object.keys(slave.coils).length})
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="discrete-tab" data-bs-toggle="tab" data-bs-target="#discrete" type="button">
+                    Discrete Inputs (${Object.keys(slave.discrete_inputs).length})
+                </button>
+            </li>
+        </ul>
+        
+        <div class="tab-content mt-3" id="registersTabContent">
+            <div class="tab-pane fade show active" id="holding" role="tabpanel">
+                <div class="table-responsive" style="max-height: 300px;">
+                    <table class="table table-sm table-striped">
+                        <thead><tr><th>Dirección</th><th>Valor</th><th>Hex</th></tr></thead>
+                        <tbody>${holdingRegistersHtml || '<tr><td colspan="3" class="text-muted">No hay registros</td></tr>'}</tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="input" role="tabpanel">
+                <div class="table-responsive" style="max-height: 300px;">
+                    <table class="table table-sm table-striped">
+                        <thead><tr><th>Dirección</th><th>Valor</th><th>Hex</th></tr></thead>
+                        <tbody>${inputRegistersHtml || '<tr><td colspan="3" class="text-muted">No hay registros</td></tr>'}</tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="coils" role="tabpanel">
+                <div class="table-responsive" style="max-height: 300px;">
+                    <table class="table table-sm table-striped">
+                        <thead><tr><th>Dirección</th><th>Estado</th><th>Valor</th></tr></thead>
+                        <tbody>${coilsHtml || '<tr><td colspan="3" class="text-muted">No hay coils</td></tr>'}</tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="discrete" role="tabpanel">
+                <div class="table-responsive" style="max-height: 300px;">
+                    <table class="table table-sm table-striped">
+                        <thead><tr><th>Dirección</th><th>Estado</th><th>Valor</th></tr></thead>
+                        <tbody>${discreteInputsHtml || '<tr><td colspan="3" class="text-muted">No hay discrete inputs</td></tr>'}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function showSlaveData(slaveId) {
+    currentSlaveId = slaveId;
+    
+    // Show the data section
+    document.getElementById('slave-data-section').style.display = 'block';
+    
+    // Get slave name
+    fetch(`/api/slave/${slaveId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('current-slave-name').textContent = data.slave.name;
+            }
+        });
+    
+    // Initialize chart
+    initializeSlaveDataChart();
+    
+    // Start real-time updates
+    if (updateInterval) {
+        clearInterval(updateInterval);
+    }
+    updateInterval = setInterval(() => updateSlaveData(slaveId), 5000);
+    
+    // Initial data load
+    updateSlaveData(slaveId);
+    
+    // Scroll to data section
+    document.getElementById('slave-data-section').scrollIntoView({ behavior: 'smooth' });
+}
+
+function initializeSlaveDataChart() {
+    const ctx = document.getElementById('slave-data-chart').getContext('2d');
+    
+    if (slaveDataChart) {
+        slaveDataChart.destroy();
+    }
+    
+    slaveDataChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: []
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            }
+        }
+    });
+}
+
+function updateSlaveData(slaveId) {
+    fetch(`/api/slave/${slaveId}/chart?hours=1`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateSlaveChart(data.chart_data);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating slave data:', error);
+        });
+    
+    // Update current registers
+    fetch(`/api/slave/${slaveId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateCurrentRegisters(data.slave);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating current registers:', error);
+        });
+}
+
+function updateSlaveChart(chartData) {
+    if (!slaveDataChart) return;
+    
+    // Clear existing data
+    slaveDataChart.data.labels = [];
+    slaveDataChart.data.datasets = [];
+    
+    // Colors for different registers
+    const colors = ['#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', '#fd7e14'];
+    let colorIndex = 0;
+    
+    // Process each register
+    Object.entries(chartData).forEach(([address, data]) => {
+        const color = colors[colorIndex % colors.length];
+        colorIndex++;
+        
+        // Use timestamps from first register for x-axis
+        if (slaveDataChart.data.labels.length === 0) {
+            slaveDataChart.data.labels = data.timestamps.map(ts => 
+                new Date(ts).toLocaleTimeString('es-ES')
+            );
+        }
+        
+        slaveDataChart.data.datasets.push({
+            label: `Register ${address}`,
+            data: data.values,
+            borderColor: color,
+            backgroundColor: color + '20',
+            tension: 0.4,
+            fill: false
+        });
+    });
+    
+    slaveDataChart.update('none');
+}
+
+function updateCurrentRegisters(slave) {
+    const container = document.getElementById('current-registers');
+    let html = '';
+    
+    // Holding registers
+    if (Object.keys(slave.holding_registers).length > 0) {
+        html += '<h6 class="text-primary">Holding Registers</h6>';
+        Object.entries(slave.holding_registers).forEach(([addr, value]) => {
+            html += `<div class="d-flex justify-content-between border-bottom py-1">
+                <small><strong>${addr}:</strong></small>
+                <small>${value}</small>
+            </div>`;
+        });
+    }
+    
+    // Input registers
+    if (Object.keys(slave.input_registers).length > 0) {
+        html += '<h6 class="text-success mt-2">Input Registers</h6>';
+        Object.entries(slave.input_registers).forEach(([addr, value]) => {
+            html += `<div class="d-flex justify-content-between border-bottom py-1">
+                <small><strong>${addr}:</strong></small>
+                <small>${value}</small>
+            </div>`;
+        });
+    }
+    
+    // Coils
+    if (Object.keys(slave.coils).length > 0) {
+        html += '<h6 class="text-warning mt-2">Coils</h6>';
+        Object.entries(slave.coils).forEach(([addr, value]) => {
+            html += `<div class="d-flex justify-content-between border-bottom py-1">
+                <small><strong>${addr}:</strong></small>
+                <small>${value ? 'ON' : 'OFF'}</small>
+            </div>`;
+        });
+    }
+    
+    container.innerHTML = html || '<div class="text-muted">No hay datos disponibles</div>';
+}
+
+function editSlaveRegister(slaveId) {
+    document.getElementById('edit-slave-id').value = slaveId;
+    const modal = new bootstrap.Modal(document.getElementById('editRegisterModal'));
+    modal.show();
+}
+
+function saveRegisterEdit() {
+    const slaveId = document.getElementById('edit-slave-id').value;
+    const registerType = document.getElementById('edit-register-type').value;
+    const address = document.getElementById('edit-register-address').value;
+    const value = document.getElementById('edit-register-value').value;
+    
+    fetch(`/api/slave/${slaveId}/update`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            register_type: registerType,
+            address: parseInt(address),
+            value: parseFloat(value)
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Registro actualizado correctamente', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('editRegisterModal')).hide();
+            loadSlaves();
+            if (currentSlaveId === parseInt(slaveId)) {
+                updateSlaveData(currentSlaveId);
+            }
+        } else {
+            showAlert('Error actualizando registro: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert('Error de conexión al actualizar registro', 'danger');
+        console.error('Error updating register:', error);
+    });
+}
+
+function addExampleSlave() {
+    // This would typically open a modal to configure a new slave
+    // For now, we'll just show a message
+    showAlert('Funcionalidad de agregar esclavo personalizado en desarrollo. Use el servidor principal para agregar esclavos.', 'info');
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    if (updateInterval) {
+        clearInterval(updateInterval);
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,710 @@
+{% extends "base.html" %}
+
+{% block title %}Gráficos y Tendencias - Modbus Industrial Server{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Chart Controls -->
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-line"></i> Análisis de Tendencias y Gráficos
+            </div>
+            <div class="card-body">
+                <div class="row align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">Esclavo</label>
+                        <select class="form-select" id="slave-select">
+                            <option value="">Seleccionar esclavo...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Período</label>
+                        <select class="form-select" id="time-period">
+                            <option value="1">Última hora</option>
+                            <option value="6">Últimas 6 horas</option>
+                            <option value="24" selected>Últimas 24 horas</option>
+                            <option value="168">Última semana</option>
+                            <option value="720">Último mes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Tipo de Gráfico</label>
+                        <select class="form-select" id="chart-type">
+                            <option value="line">Líneas</option>
+                            <option value="bar">Barras</option>
+                            <option value="area">Área</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-primary w-100" onclick="updateCharts()">
+                            <i class="fas fa-sync"></i> Actualizar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Main Chart -->
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-chart-area"></i> Tendencias de Registros</span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="exportChart('png')" title="Exportar PNG">
+                        <i class="fas fa-image"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="exportChart('csv')" title="Exportar CSV">
+                        <i class="fas fa-file-csv"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="main-chart"></canvas>
+                </div>
+                <div id="no-data-message" class="text-center text-muted py-5" style="display: none;">
+                    <i class="fas fa-chart-line fa-3x mb-3"></i>
+                    <h5>No hay datos disponibles</h5>
+                    <p>Seleccione un esclavo y período para ver los gráficos</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Chart Statistics -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-calculator"></i> Estadísticas
+            </div>
+            <div class="card-body">
+                <div id="chart-statistics">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-info-circle"></i>
+                        <p>Seleccione datos para ver estadísticas</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Register Selection -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <i class="fas fa-list"></i> Registros Disponibles
+            </div>
+            <div class="card-body">
+                <div id="register-checkboxes">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-database"></i>
+                        <p>Seleccione un esclavo para ver registros</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- System Performance Charts -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-server"></i> Rendimiento del Sistema
+            </div>
+            <div class="card-body">
+                <div class="chart-container" style="height: 250px;">
+                    <canvas id="system-performance-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Communication Statistics -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-network-wired"></i> Estadísticas de Comunicación
+            </div>
+            <div class="card-body">
+                <div class="chart-container" style="height: 250px;">
+                    <canvas id="communication-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Historical Data Table -->
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-table"></i> Datos Históricos</span>
+                <button class="btn btn-outline-primary btn-sm" onclick="refreshHistoricalData()">
+                    <i class="fas fa-sync"></i> Actualizar
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped" id="historical-data-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Esclavo</th>
+                                <th>Tipo</th>
+                                <th>Dirección</th>
+                                <th>Valor</th>
+                                <th>Calidad</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">
+                                    <i class="fas fa-spinner fa-spin"></i> Cargando datos...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let mainChart = null;
+let systemPerformanceChart = null;
+let communicationChart = null;
+let currentSlaveId = null;
+let selectedRegisters = new Set();
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeCharts();
+    loadSlaves();
+    loadHistoricalData();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(function() {
+        if (currentSlaveId) {
+            updateCharts();
+        }
+        updateSystemCharts();
+    }, 30000);
+    
+    // Event listeners
+    document.getElementById('slave-select').addEventListener('change', onSlaveChange);
+    document.getElementById('time-period').addEventListener('change', updateCharts);
+    document.getElementById('chart-type').addEventListener('change', updateChartType);
+});
+
+function initializeCharts() {
+    // Main chart
+    const mainCtx = document.getElementById('main-chart').getContext('2d');
+    mainChart = new Chart(mainCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: []
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            }
+        }
+    });
+    
+    // System performance chart
+    const sysCtx = document.getElementById('system-performance-chart').getContext('2d');
+    systemPerformanceChart = new Chart(sysCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'CPU %',
+                    data: [],
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    tension: 0.4
+                },
+                {
+                    label: 'Memory %',
+                    data: [],
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    tension: 0.4
+                },
+                {
+                    label: 'Temperature °C',
+                    data: [],
+                    borderColor: '#ffc107',
+                    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            }
+        }
+    });
+    
+    // Communication chart
+    const commCtx = document.getElementById('communication-chart').getContext('2d');
+    communicationChart = new Chart(commCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Exitosas', 'Fallidas'],
+            datasets: [{
+                data: [0, 0],
+                backgroundColor: ['#28a745', '#dc3545'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+    
+    // Start system charts updates
+    updateSystemCharts();
+}
+
+function loadSlaves() {
+    fetch('/api/slaves')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const select = document.getElementById('slave-select');
+                select.innerHTML = '<option value="">Seleccionar esclavo...</option>';
+                
+                data.slaves.forEach(slave => {
+                    select.innerHTML += `<option value="${slave.id}">${slave.name} (ID: ${slave.id})</option>`;
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error loading slaves:', error);
+        });
+}
+
+function onSlaveChange() {
+    const slaveId = document.getElementById('slave-select').value;
+    currentSlaveId = slaveId ? parseInt(slaveId) : null;
+    
+    if (currentSlaveId) {
+        loadSlaveRegisters(currentSlaveId);
+        updateCharts();
+    } else {
+        clearCharts();
+        clearRegisterCheckboxes();
+    }
+}
+
+function loadSlaveRegisters(slaveId) {
+    fetch(`/api/slave/${slaveId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayRegisterCheckboxes(data.slave);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading slave registers:', error);
+        });
+}
+
+function displayRegisterCheckboxes(slave) {
+    const container = document.getElementById('register-checkboxes');
+    let html = '';
+    
+    // Holding registers
+    if (Object.keys(slave.holding_registers).length > 0) {
+        html += '<h6 class="text-primary">Holding Registers</h6>';
+        Object.entries(slave.holding_registers).forEach(([addr, value]) => {
+            html += `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="holding_${addr}" 
+                           id="reg_holding_${addr}" onchange="onRegisterToggle(this)" checked>
+                    <label class="form-check-label" for="reg_holding_${addr}">
+                        ${addr}: ${value}
+                    </label>
+                </div>
+            `;
+            selectedRegisters.add(`holding_${addr}`);
+        });
+    }
+    
+    // Input registers
+    if (Object.keys(slave.input_registers).length > 0) {
+        html += '<h6 class="text-success mt-2">Input Registers</h6>';
+        Object.entries(slave.input_registers).forEach(([addr, value]) => {
+            html += `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="input_${addr}" 
+                           id="reg_input_${addr}" onchange="onRegisterToggle(this)" checked>
+                    <label class="form-check-label" for="reg_input_${addr}">
+                        ${addr}: ${value}
+                    </label>
+                </div>
+            `;
+            selectedRegisters.add(`input_${addr}`);
+        });
+    }
+    
+    container.innerHTML = html || '<div class="text-muted">No hay registros disponibles</div>';
+}
+
+function onRegisterToggle(checkbox) {
+    if (checkbox.checked) {
+        selectedRegisters.add(checkbox.value);
+    } else {
+        selectedRegisters.delete(checkbox.value);
+    }
+    updateCharts();
+}
+
+function clearRegisterCheckboxes() {
+    document.getElementById('register-checkboxes').innerHTML = `
+        <div class="text-center text-muted">
+            <i class="fas fa-database"></i>
+            <p>Seleccione un esclavo para ver registros</p>
+        </div>
+    `;
+    selectedRegisters.clear();
+}
+
+function updateCharts() {
+    if (!currentSlaveId) {
+        clearCharts();
+        return;
+    }
+    
+    const hours = document.getElementById('time-period').value;
+    
+    fetch(`/api/slave/${currentSlaveId}/chart?hours=${hours}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateMainChart(data.chart_data);
+                updateStatistics(data.chart_data);
+                document.getElementById('no-data-message').style.display = 'none';
+            } else {
+                clearCharts();
+                document.getElementById('no-data-message').style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('Error updating charts:', error);
+            clearCharts();
+            document.getElementById('no-data-message').style.display = 'block';
+        });
+}
+
+function updateMainChart(chartData) {
+    if (!mainChart) return;
+    
+    // Clear existing data
+    mainChart.data.labels = [];
+    mainChart.data.datasets = [];
+    
+    // Colors for different registers
+    const colors = ['#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c'];
+    let colorIndex = 0;
+    
+    // Process each register
+    Object.entries(chartData).forEach(([address, data]) => {
+        const registerKey = `holding_${address}`; // Assume holding for now
+        
+        // Only show selected registers
+        if (!selectedRegisters.has(registerKey) && !selectedRegisters.has(`input_${address}`)) {
+            return;
+        }
+        
+        const color = colors[colorIndex % colors.length];
+        colorIndex++;
+        
+        // Use timestamps from first register for x-axis
+        if (mainChart.data.labels.length === 0) {
+            mainChart.data.labels = data.timestamps.map(ts => 
+                new Date(ts).toLocaleString('es-ES', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })
+            );
+        }
+        
+        mainChart.data.datasets.push({
+            label: `Register ${address}`,
+            data: data.values,
+            borderColor: color,
+            backgroundColor: color + '20',
+            tension: 0.4,
+            fill: document.getElementById('chart-type').value === 'area'
+        });
+    });
+    
+    mainChart.update('none');
+}
+
+function updateChartType() {
+    const chartType = document.getElementById('chart-type').value;
+    
+    if (mainChart) {
+        mainChart.config.type = chartType === 'area' ? 'line' : chartType;
+        
+        // Update fill property for area charts
+        mainChart.data.datasets.forEach(dataset => {
+            dataset.fill = chartType === 'area';
+        });
+        
+        mainChart.update();
+    }
+}
+
+function updateStatistics(chartData) {
+    const container = document.getElementById('chart-statistics');
+    let html = '';
+    
+    if (Object.keys(chartData).length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted">
+                <i class="fas fa-info-circle"></i>
+                <p>No hay datos para mostrar estadísticas</p>
+            </div>
+        `;
+        return;
+    }
+    
+    Object.entries(chartData).forEach(([address, data]) => {
+        if (data.values.length === 0) return;
+        
+        const values = data.values;
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+        const latest = values[values.length - 1];
+        
+        html += `
+            <div class="mb-3 p-2 border rounded">
+                <h6 class="text-primary mb-2">Register ${address}</h6>
+                <div class="row text-center">
+                    <div class="col-6">
+                        <small class="text-muted">Actual</small>
+                        <div class="fw-bold">${latest.toFixed(2)}</div>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Promedio</small>
+                        <div class="fw-bold">${avg.toFixed(2)}</div>
+                    </div>
+                    <div class="col-6 mt-2">
+                        <small class="text-muted">Mínimo</small>
+                        <div class="fw-bold text-success">${min.toFixed(2)}</div>
+                    </div>
+                    <div class="col-6 mt-2">
+                        <small class="text-muted">Máximo</small>
+                        <div class="fw-bold text-danger">${max.toFixed(2)}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+function updateSystemCharts() {
+    fetch('/api/system/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const status = data.status;
+                const now = new Date().toLocaleTimeString('es-ES');
+                
+                // Update system performance chart
+                systemPerformanceChart.data.labels.push(now);
+                systemPerformanceChart.data.datasets[0].data.push(status.cpu_percent);
+                systemPerformanceChart.data.datasets[1].data.push(status.memory_percent);
+                systemPerformanceChart.data.datasets[2].data.push(status.temperature);
+                
+                // Keep only last 20 points
+                if (systemPerformanceChart.data.labels.length > 20) {
+                    systemPerformanceChart.data.labels.shift();
+                    systemPerformanceChart.data.datasets.forEach(dataset => {
+                        dataset.data.shift();
+                    });
+                }
+                
+                systemPerformanceChart.update('none');
+            }
+        })
+        .catch(error => {
+            console.error('Error updating system charts:', error);
+        });
+    
+    // Update communication statistics
+    fetch('/api/statistics')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const stats = data.statistics;
+                const successful = stats.total_requests * (stats.success_rate / 100);
+                const failed = stats.total_requests - successful;
+                
+                communicationChart.data.datasets[0].data = [successful, failed];
+                communicationChart.update('none');
+            }
+        })
+        .catch(error => {
+            console.error('Error updating communication chart:', error);
+        });
+}
+
+function clearCharts() {
+    if (mainChart) {
+        mainChart.data.labels = [];
+        mainChart.data.datasets = [];
+        mainChart.update();
+    }
+    
+    document.getElementById('chart-statistics').innerHTML = `
+        <div class="text-center text-muted">
+            <i class="fas fa-info-circle"></i>
+            <p>Seleccione datos para ver estadísticas</p>
+        </div>
+    `;
+}
+
+function loadHistoricalData() {
+    // Load recent historical data for the table
+    fetch('/api/slave/1/data?hours=24') // Default to slave 1 if available
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayHistoricalData(data.data);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading historical data:', error);
+        });
+}
+
+function displayHistoricalData(data) {
+    const tbody = document.querySelector('#historical-data-table tbody');
+    tbody.innerHTML = '';
+    
+    if (data.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-muted">
+                    No hay datos históricos disponibles
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    data.slice(0, 100).forEach(row => { // Show only first 100 rows
+        const timestamp = new Date(row.timestamp).toLocaleString('es-ES');
+        const qualityClass = row.quality === 'GOOD' ? 'text-success' : 'text-warning';
+        
+        tbody.innerHTML += `
+            <tr>
+                <td><small>${timestamp}</small></td>
+                <td>${currentSlaveId || 'N/A'}</td>
+                <td><span class="badge bg-secondary">${row.register_type}</span></td>
+                <td>${row.register_address}</td>
+                <td><strong>${row.register_value}</strong></td>
+                <td><span class="${qualityClass}">${row.quality}</span></td>
+            </tr>
+        `;
+    });
+}
+
+function refreshHistoricalData() {
+    if (currentSlaveId) {
+        const hours = document.getElementById('time-period').value;
+        fetch(`/api/slave/${currentSlaveId}/data?hours=${hours}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayHistoricalData(data.data);
+                }
+            })
+            .catch(error => {
+                console.error('Error refreshing historical data:', error);
+            });
+    }
+}
+
+function exportChart(format) {
+    if (format === 'png') {
+        const link = document.createElement('a');
+        link.download = `modbus_chart_${new Date().toISOString().slice(0, 10)}.png`;
+        link.href = mainChart.toBase64Image();
+        link.click();
+        showAlert('Gráfico exportado como PNG', 'success');
+    } else if (format === 'csv') {
+        // Export chart data as CSV
+        let csv = 'Timestamp,Register,Value\n';
+        
+        mainChart.data.datasets.forEach(dataset => {
+            dataset.data.forEach((value, index) => {
+                const timestamp = mainChart.data.labels[index];
+                csv += `${timestamp},${dataset.label},${value}\n`;
+            });
+        });
+        
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const link = document.createElement('a');
+        link.download = `modbus_data_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.href = URL.createObjectURL(blob);
+        link.click();
+        showAlert('Datos exportados como CSV', 'success');
+    }
+}
+</script>
+{% endblock %}

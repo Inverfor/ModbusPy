@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Modbus Industrial Server{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Server Control Panel -->
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-server"></i> Control del Servidor
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h5 class="mb-1">Estado del Servidor Modbus</h5>
+                        <p class="text-muted mb-0">
+                            <span id="detailed-status">Verificando estado...</span>
+                        </p>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <button id="start-server-btn" class="btn btn-success me-2">
+                            <i class="fas fa-play"></i> Iniciar
+                        </button>
+                        <button id="stop-server-btn" class="btn btn-danger">
+                            <i class="fas fa-stop"></i> Detener
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- System Metrics -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body metric-card">
+                <div class="metric-value" id="cpu-usage">--</div>
+                <div class="metric-label">CPU Usage</div>
+                <small class="text-muted">
+                    <i class="fas fa-microchip"></i> ARM Cortex-A53
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body metric-card">
+                <div class="metric-value" id="memory-usage">--</div>
+                <div class="metric-label">Memory Usage</div>
+                <small class="text-muted">
+                    <i class="fas fa-memory"></i> 512MB RAM
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body metric-card">
+                <div class="metric-value" id="temperature">--</div>
+                <div class="metric-label">Temperature</div>
+                <small class="text-muted">
+                    <i class="fas fa-thermometer-half"></i> CPU Temp
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body metric-card">
+                <div class="metric-value" id="active-slaves">--</div>
+                <div class="metric-label">Active Slaves</div>
+                <small class="text-muted">
+                    <i class="fas fa-network-wired"></i> Modbus RTU
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Statistics Overview -->
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-area"></i> Estadísticas en Tiempo Real
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="realtime-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Stats -->
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-info-circle"></i> Resumen
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6 mb-3">
+                        <div class="metric-value text-primary" id="total-requests">0</div>
+                        <div class="metric-label">Total Requests</div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="metric-value text-success" id="success-rate">0%</div>
+                        <div class="metric-label">Success Rate</div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="metric-value text-info" id="data-points">0</div>
+                        <div class="metric-label">Data Points</div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="metric-value text-warning" id="uptime">0h 0m</div>
+                        <div class="metric-label">System Uptime</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Active Slaves -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-list"></i> Esclavos Activos
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Estado</th>
+                                <th>Registros</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="slaves-table">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">
+                                    <i class="fas fa-spinner fa-spin"></i> Cargando...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Events -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-clock"></i> Eventos Recientes
+            </div>
+            <div class="card-body">
+                <div id="recent-events" style="max-height: 300px; overflow-y: auto;">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin"></i> Cargando eventos...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let realtimeChart;
+let updateInterval;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeRealtimeChart();
+    updateDashboard();
+    
+    // Update every 5 seconds
+    updateInterval = setInterval(updateDashboard, 5000);
+    
+    // Server control buttons
+    document.getElementById('start-server-btn').addEventListener('click', startServer);
+    document.getElementById('stop-server-btn').addEventListener('click', stopServer);
+});
+
+function initializeRealtimeChart() {
+    const ctx = document.getElementById('realtime-chart').getContext('2d');
+    
+    realtimeChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'CPU Usage (%)',
+                    data: [],
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Memory Usage (%)',
+                    data: [],
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Temperature (°C)',
+                    data: [],
+                    borderColor: '#ffc107',
+                    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                },
+                x: {
+                    display: false
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            },
+            animation: {
+                duration: 0
+            }
+        }
+    });
+}
+
+function updateDashboard() {
+    updateSystemStatus();
+    updateStatistics();
+    updateSlavesList();
+}
+
+function updateSystemStatus() {
+    fetch('/api/system/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const status = data.status;
+                
+                // Update metrics
+                document.getElementById('cpu-usage').textContent = status.cpu_percent.toFixed(1) + '%';
+                document.getElementById('memory-usage').textContent = status.memory_percent.toFixed(1) + '%';
+                document.getElementById('temperature').textContent = status.temperature.toFixed(1) + '°C';
+                document.getElementById('uptime').textContent = status.uptime;
+                
+                // Update detailed status
+                const detailedStatus = document.getElementById('detailed-status');
+                if (status.server_running) {
+                    detailedStatus.innerHTML = '<i class="fas fa-check-circle text-success"></i> Servidor activo y funcionando';
+                    document.getElementById('start-server-btn').disabled = true;
+                    document.getElementById('stop-server-btn').disabled = false;
+                } else {
+                    detailedStatus.innerHTML = '<i class="fas fa-times-circle text-danger"></i> Servidor detenido';
+                    document.getElementById('start-server-btn').disabled = false;
+                    document.getElementById('stop-server-btn').disabled = true;
+                }
+                
+                // Update realtime chart
+                updateRealtimeChart(status);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating system status:', error);
+        });
+}
+
+function updateRealtimeChart(status) {
+    const now = new Date().toLocaleTimeString();
+    
+    // Add new data point
+    realtimeChart.data.labels.push(now);
+    realtimeChart.data.datasets[0].data.push(status.cpu_percent);
+    realtimeChart.data.datasets[1].data.push(status.memory_percent);
+    realtimeChart.data.datasets[2].data.push(status.temperature);
+    
+    // Keep only last 20 points
+    if (realtimeChart.data.labels.length > 20) {
+        realtimeChart.data.labels.shift();
+        realtimeChart.data.datasets.forEach(dataset => {
+            dataset.data.shift();
+        });
+    }
+    
+    realtimeChart.update('none');
+}
+
+function updateStatistics() {
+    fetch('/api/statistics')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const stats = data.statistics;
+                
+                document.getElementById('total-requests').textContent = formatNumber(stats.total_requests);
+                document.getElementById('success-rate').textContent = stats.success_rate.toFixed(1) + '%';
+                document.getElementById('data-points').textContent = formatNumber(stats.data_points);
+                document.getElementById('active-slaves').textContent = stats.active_slaves;
+            }
+        })
+        .catch(error => {
+            console.error('Error updating statistics:', error);
+        });
+}
+
+function updateSlavesList() {
+    fetch('/api/slaves')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const tbody = document.getElementById('slaves-table');
+                tbody.innerHTML = '';
+                
+                if (data.slaves.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">
+                                No hay esclavos configurados
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    data.slaves.forEach(slave => {
+                        const statusClass = slave.status === 'active' ? 'status-active' : 'status-inactive';
+                        const statusText = slave.status === 'active' ? 'Activo' : 'Inactivo';
+                        
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${slave.id}</td>
+                                <td>${slave.name}</td>
+                                <td>
+                                    <span class="status-indicator ${statusClass}"></span>
+                                    ${statusText}
+                                </td>
+                                <td>${slave.total_registers}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="viewSlaveDetails(${slave.id})">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error updating slaves list:', error);
+        });
+}
+
+function startServer() {
+    fetch('/api/server/start', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Servidor Modbus iniciado correctamente', 'success');
+            updateDashboard();
+        } else {
+            showAlert('Error al iniciar el servidor: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert('Error de conexión al iniciar el servidor', 'danger');
+        console.error('Error starting server:', error);
+    });
+}
+
+function stopServer() {
+    fetch('/api/server/stop', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Servidor Modbus detenido correctamente', 'warning');
+            updateDashboard();
+        } else {
+            showAlert('Error al detener el servidor: ' + data.error, 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert('Error de conexión al detener el servidor', 'danger');
+        console.error('Error stopping server:', error);
+    });
+}
+
+function viewSlaveDetails(slaveId) {
+    window.location.href = `/slaves?slave=${slaveId}`;
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    if (updateInterval) {
+        clearInterval(updateInterval);
+    }
+});
+</script>
+{% endblock %}
