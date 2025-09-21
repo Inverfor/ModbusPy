@@ -49,9 +49,9 @@ echo "  Versión 1.0"
 echo "=================================================="
 echo -e "${NC}"
 
-# Verificar si se ejecuta como usuario pi
-if [ "$USER" != "pi" ]; then
-    print_warning "Se recomienda ejecutar este script como usuario 'pi'"
+# Verificar si se ejecuta como usuario inverforZeroUbuntu
+if [ "$USER" != "inverforZeroUbuntu" ]; then
+    print_warning "Se recomienda ejecutar este script como usuario 'inverforZeroUbuntu'"
     read -p "¿Continuar de todos modos? (y/N): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -107,7 +107,7 @@ EOF
 # Paso 7: Configurar permisos del sistema
 print_status "Configurando permisos del sistema..."
 sudo mkdir -p /var/log/modbus /var/backups/modbus
-sudo chown pi:pi /var/log/modbus /var/backups/modbus
+sudo chown inverforZeroUbuntu:inverforZeroUbuntu /var/log/modbus /var/backups/modbus
 check_command "Configuración de permisos del sistema"
 
 # Paso 8: Configurar firewall
@@ -153,11 +153,11 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/modbus_server
-Environment=PATH=/home/pi/modbus_server/modbus_env/bin
-ExecStart=/home/pi/modbus_server/modbus_env/bin/python /home/pi/modbus_server/modbus_industrial_server.py
+User=inverforZeroUbuntu
+Group=inverforZeroUbuntu
+WorkingDirectory=/home/inverforZeroUbuntu/modbus_server
+Environment=PATH=/home/inverforZeroUbuntu/modbus_server/modbus_env/bin
+ExecStart=/home/inverforZeroUbuntu/modbus_server/modbus_env/bin/python /home/inverforZeroUbuntu/modbus_server/modbus_industrial_server.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -177,11 +177,11 @@ Requires=modbus-server.service
 
 [Service]
 Type=simple
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/modbus_server
-Environment=PATH=/home/pi/modbus_server/modbus_env/bin
-ExecStart=/home/pi/modbus_server/modbus_env/bin/python /home/pi/modbus_server/modbus_web_server.py
+User=inverforZeroUbuntu
+Group=inverforZeroUbuntu
+WorkingDirectory=/home/inverforZeroUbuntu/modbus_server
+Environment=PATH=/home/inverforZeroUbuntu/modbus_server/modbus_env/bin
+ExecStart=/home/inverforZeroUbuntu/modbus_server/modbus_env/bin/python /home/inverforZeroUbuntu/modbus_server/modbus_web_server.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -222,8 +222,8 @@ DATE=$(date +%Y%m%d_%H%M%S)
 
 # Crear backup de configuración
 tar -czf "$BACKUP_DIR/modbus_config_$DATE.tar.gz" \
-    ~/modbus_server/modbus_server_config.json \
-    ~/modbus_server/modbus_data.db 2>/dev/null
+    /home/inverforZeroUbuntu/modbus_server/modbus_server_config.json \
+    /home/inverforZeroUbuntu/modbus_server/modbus_data.db 2>/dev/null
 
 # Mantener solo los últimos 10 backups
 ls -t $BACKUP_DIR/modbus_config_*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm
